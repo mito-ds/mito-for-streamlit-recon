@@ -67,21 +67,9 @@ with consume_tab:
     with open(f"{recon_folder}/{recon_script}", "r") as f:
         code = f.read()
 
+    # Chop off the final line
+    code = "\n".join(code.split("\n")[:-2])
     
-    # Read in the new file to run the recon on
-    file = st.file_uploader("Upload a new file", type=["csv"])
-    if file:
-        # Write the file to disk
-        with open("new_file.csv", "wb") as f:
-            f.write(file.read())
-
-        
-    # Append the code to read in the current file
-    code = f"""import pandas as pd
-df = pd.read_csv('new_file.csv')
-{code}
-"""
-
     st.code(code)
 
     # Exec the code and get any defined functions from it
@@ -90,15 +78,29 @@ df = pd.read_csv('new_file.csv')
     new_functions = []
     for f in functions:
         # Filter them out if they are from mitosheet
-        if "mitosheet" not in str(inspect.getmodule(f)):
+        if "mitosheet" not in str(inspect.getmodule(f)) :
+            print(inspect.getmodule(f))
+        
             new_functions.append(f)
+        
+
+    recon_function = new_functions[0]
+    print(recon_function)
+
+    # Read in the new file to run the recon on
+    file = st.file_uploader("Upload a new file", type=["csv"])
+
+
+    # Run the recon function on the new file
+    if file:
+        df = pd.read_csv(file)
+        recon_df = recon_function(df)
+
+        st.write(recon_df)
+        st.success(recon_df)
+
     
     st.write(new_functions)
-
-    
-
-
-    df = pd.read_csv(file)
 
 
 
