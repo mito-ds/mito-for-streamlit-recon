@@ -1,2 +1,3 @@
 mitosheet
 streamlit
+mitosheet-helper-enterprise

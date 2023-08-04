@@ -5,7 +5,18 @@ import streamlit as st
 from mitosheet.streamlit.v1 import spreadsheet
 
 st.set_page_config(layout='wide')
-st.title("Recon Demo App")
+st.title("Data Automation Demo App")
+
+st.markdown("""
+This application shows how Mito Enterprise can help non-technical users automate a process using Mito, 
+without needing to know any Python code. See instructions below.
+            
+#### App Limitaitons
+1.  This application only supports a single dataframe as input / output. Ensure you never
+    have more than one tab in your spreadsheet.
+2.  The data format of original data, as well as the data the recon is being rerun
+    on must be the same.
+""")
 
 FOLDER = './recon'
 
@@ -14,7 +25,7 @@ FOLDER = './recon'
 # 2. Create a recon script using the mitosheet
 # 3. Run the recon script on new data
 
-create_tab, consume_tab = st.tabs(["Create Recon Script", "Run Recon Script"])
+create_tab, consume_tab = st.tabs(["Create Automation Script", "Run Automation Script"])
 
 def get_code_to_write(description, code):
     return f"""\"\"\"
@@ -25,7 +36,15 @@ def get_code_to_write(description, code):
 """    
 
 with create_tab:
-    st.write("Create Recon Script")
+    st.markdown("""
+## Creating a Data Automation
+            
+1. Give a Name and Description for the process you are automating. 
+2. Upload a file that is the start of your data automation.
+3. Use Mito to add new columns, filter, and transform your data into a final state.
+4. Open **Code > Configure Code** and turn Generate Function to True.
+4. Click the save button at the bottom, and then switch to the Run Automation Script tab.
+""")
 
     # Get a name and description for the recon
     name = st.text_input("Name")
@@ -36,7 +55,10 @@ with create_tab:
     if file:
         
         df = pd.read_csv(file)
-        _, code = spreadsheet(df, df_names=["df"])
+        new_dfs, code = spreadsheet(df, df_names=["df"])
+
+        if len(new_dfs) > 1:
+            st.error("Please ensure there is only one tab in your sheet. This demo application only supports single-tab automations.")
 
         st.code(code)
 
@@ -62,7 +84,13 @@ with create_tab:
             st.success(f"Saved recon script to {recon_path}")
 
 with consume_tab:
-    st.write("Run Recon Script")
+    st.markdown("""
+## Consuming a Data Automation
+1. Switch to the Run Automation Script tab.
+2. Select an automation you want to run. 
+3. Upload a dataset that contains new data in the _same format_ as the original data.
+4. Watch the recon run on your new dataset!
+""")
 
     # Let users select a recon script, from the recon folder
     recon_scripts = [None] + (os.listdir(FOLDER) if os.path.exists(FOLDER) else [])
@@ -102,8 +130,24 @@ with consume_tab:
         df = pd.read_csv(file)
         recon_df = recon_function(df)
 
-        st.write(recon_df)
-        st.success('Finished!')
+        # Allow users to download this new dataframe
+
+        st.success("Finished recon.")
+
+        @st.cache_data
+        def convert_df(df):
+            # IMPORTANT: Cache the conversion to prevent computation on every rerun
+            return df.to_csv().encode('utf-8')
+
+        csv = convert_df(recon_df)
+        st.download_button(
+            label="Download final recon as CSV",
+            data=csv,
+            file_name='recon.csv',
+            mime='text/csv',
+        )
+
+
 
 
 
