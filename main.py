@@ -102,7 +102,7 @@ with consume_tab:
     # Read in params
     updated_metadata = {}
     for param in analysis.get_param_metadata(param_type='import'):
-        new_param = st.file_uploader(param['name'])
+        new_param = st.file_uploader(param['name'], type=['csv'])
         if new_param and param['subtype'] == 'import_dataframe':
             new_param = pd.read_csv(new_param)
         if new_param is not None:
@@ -110,7 +110,6 @@ with consume_tab:
 
     run = st.button('Run')
     if run:
-        print('running')
         result = analysis.run(**updated_metadata)
 
         @st.cache_data
@@ -119,8 +118,11 @@ with consume_tab:
             return df.to_csv().encode('utf-8')
 
         downloads = []
-        for res in result:
-            downloads.append(convert_df(res))
+        if isinstance(result, pd.DataFrame):
+            downloads.append(convert_df(result))
+        elif isinstance(result, tuple) and len(result) > 0:
+            for res in result:
+                downloads.append(convert_df(res))
         st.download_button(
             label="Download final automation as CSV",
             data=downloads[0],
