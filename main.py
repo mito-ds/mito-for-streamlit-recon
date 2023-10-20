@@ -125,7 +125,7 @@ with consume_tab:
                 downloads.append(convert_df(res))
         st.download_button(
             label="Download final automation as CSV",
-            data=downloads[0],
+            data=downloads[-1],
             file_name='automation.csv',
             mime='text/csv',
         )
