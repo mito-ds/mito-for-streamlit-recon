@@ -2,7 +2,7 @@ import inspect
 import os
 import pandas as pd
 import streamlit as st
-from mitosheet.streamlit.v1 import spreadsheet
+from mitosheet.streamlit.v1 import spreadsheet, MitoAnalysis
 
 st.set_page_config(layout='wide')
 st.title("Data Automation Demo App")
@@ -50,22 +50,19 @@ with create_tab:
     name = st.text_input("Name")
     description = st.text_area("Description")
 
-    file = st.file_uploader("Upload a file", type=["csv"])
+    files = st.file_uploader("Upload a file", type=["csv"], accept_multiple_files=True)
 
-    if file:
-        
-        df = pd.read_csv(file)
-        new_dfs, code = spreadsheet(df, df_names=["df"])
+    if files:
+        dfs = []
+        for file in files:
+            dfs.append(pd.read_csv(file))
+        analysis: MitoAnalysis = spreadsheet(*dfs, return_type='analysis')
 
-        if len(new_dfs) > 1:
-            st.error("Please ensure there is only one tab in your sheet. This demo application only supports single-tab automations.")
-
-        st.code(code)
+        st.code(analysis.fully_parameterized_function)
 
         # Add button to save script
         save = st.button("Save Script")
         if save:
-
             automation_path = f'{FOLDER}/{name}'
             check_path = f'{automation_path}/check.py'
             data_path = f'{automation_path}/data.csv'
@@ -77,9 +74,7 @@ with create_tab:
 
             # Write the file
             with open(check_path, "w") as f:
-                f.write(get_code_to_write(description, code))
-            # Write the data
-            df.to_csv(data_path, index=False)
+                f.write(analysis.to_json())
 
             st.success(f"Saved automation script to {automation_path}")
 
@@ -102,55 +97,38 @@ with consume_tab:
 
     # Load the script
     with open(f"{FOLDER}/{automation_script}/check.py", "r") as f:
-        code = f.read()
+        analysis = MitoAnalysis.from_json(f.read())
 
-    # Chop off the final line
-    code = "\n".join(code.split("\n")[:-2])
+    # Read in params
+    updated_metadata = {}
+    for param in analysis.get_param_metadata(param_type='import'):
+        new_param = st.file_uploader(param['name'], type=['csv'])
+        if new_param and param['subtype'] == 'import_dataframe':
+            new_param = pd.read_csv(new_param)
+        if new_param is not None:
+            updated_metadata[param['name']] = new_param
 
-    # Show the description of the automation, which is the doc-string at the top of code
-    description = code[3:code[3:].index('"""') + 3]
-    st.text(description)
-    
-    # Exec the code and get any defined functions from it
-    functions_before = [f for f in locals().values() if callable(f)]
-    exec(code)
-    functions = [f for f in locals().values() if callable(f) and f not in functions_before]
-    new_functions = []
-    for f in functions:
-        # Filter them out if they are from mitosheet
-        if "mitosheet" not in str(inspect.getmodule(f)) :
-            new_functions.append(f)
-
-    if len(new_functions) != 1:
-        st.error('Please make sure the defined Python script has just one functiond defined in it.')       
-        st.stop()
-
-    automation_function = new_functions[0]
-    # Read in the new file to run the automation on
-    file = st.file_uploader("Upload a new file to run the automation on.", type=["csv"])
-
-    # Run the automation function on the new file
-    if file:
-        df = pd.read_csv(file)
-        automation_df = automation_function(df)
-
-        # Allow users to download this new dataframe
-
-        st.success("Finished automation.")
+    run = st.button('Run')
+    if run:
+        result = analysis.run(**updated_metadata)
 
         @st.cache_data
         def convert_df(df):
             # IMPORTANT: Cache the conversion to prevent computation on every rerun
             return df.to_csv().encode('utf-8')
 
-        csv = convert_df(automation_df)
+        downloads = []
+        if isinstance(result, pd.DataFrame):
+            downloads.append(convert_df(result))
+        elif isinstance(result, tuple) and len(result) > 0:
+            for res in result:
+                downloads.append(convert_df(res))
         st.download_button(
             label="Download final automation as CSV",
-            data=csv,
+            data=downloads[-1],
             file_name='automation.csv',
             mime='text/csv',
         )
-
 
 
 
